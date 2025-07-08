@@ -20,10 +20,10 @@ from __future__ import annotations
 import datetime as _dt
 import time
 from collections import Counter
-from typing import Any, Dict, List
+from typing import List
 
-from aqt import gui_hooks, mw  # type: ignore
-from aqt.qt import QMessageBox  # type: ignore
+from . import gui_hooks, mw  # type: ignore
+from .qt import QMessageBox  # type: ignore[attr-defined]
 from anki.decks import DeckId  # type: ignore
 from anki.scheduler import FilteredDeckForUpdate  # type: ignore
 from anki.decks import FilteredDeckConfig  # type: ignore

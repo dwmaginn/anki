@@ -28,8 +28,8 @@ from anki.scheduler.v3 import (
 from anki.tags import MARKED_TAG
 from anki.types import assert_exhaustive
 from anki.utils import is_mac, strip_html
+# Standard library
 import os
-import threading
 # openai will be imported lazily inside worker to avoid startup failure if missing
 from aqt import AnkiQt, gui_hooks
 from aqt.browser.card_info import PreviousReviewerCardInfo, ReviewerCardInfo
