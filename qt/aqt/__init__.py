@@ -119,8 +119,9 @@ import aqt.forms
 from aqt import addcards, addons, browser, editcurrent, filtered_deck  # isort:skip
 from aqt import stats, about, preferences, mediasync  # isort:skip
 
-# Tudr AI-enhanced features
+# Tudr modules must be imported after addons etc. so hooks register
 import aqt.tudr_features  # type: ignore  # noqa: E402
+import aqt.tudr_analytics  # type: ignore  # noqa: E402
 
 
 class DialogManager:
