@@ -119,9 +119,9 @@ import aqt.forms
 from aqt import addcards, addons, browser, editcurrent, filtered_deck  # isort:skip
 from aqt import stats, about, preferences, mediasync  # isort:skip
 
-# Tudr modules must be imported after addons etc. so hooks register
-import aqt.tudr_features  # type: ignore  # noqa: E402
-import aqt.tudr_analytics  # type: ignore  # noqa: E402
+# Import Tudr main initialiser (registers hooks); kept separate to avoid cycles
+# It registers after profile open to import submodules safely.
+import aqt.tudr_main  # type: ignore  # noqa: E402
 
 
 class DialogManager:
