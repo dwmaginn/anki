@@ -23,7 +23,7 @@ from collections import Counter
 from typing import List
 
 from . import gui_hooks, mw  # type: ignore
-from .qt import QMessageBox  # type: ignore[attr-defined]
+from .qt import QMessageBox  # type: ignore[attr-defined,import-error]
 from anki.decks import DeckId  # type: ignore
 from anki.scheduler import FilteredDeckForUpdate  # type: ignore
 from anki.decks import FilteredDeckConfig  # type: ignore

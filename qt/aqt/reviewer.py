@@ -27,7 +27,10 @@ from anki.scheduler.v3 import (
 )
 from anki.tags import MARKED_TAG
 from anki.types import assert_exhaustive
+# Tudr imports
 from anki.utils import is_mac, strip_html
+
+from .tudr_tutor import TutorDialog  # type: ignore
 # Standard library
 import os
 # openai will be imported lazily inside worker to avoid startup failure if missing
@@ -1250,43 +1253,11 @@ timerStopped = false;
         question_text = strip_html(self.card.question())
         answer_text = strip_html(self.card.answer())
 
-        prompt = (
-            "You are a helpful tutor for flashcards. "
-            "Given the following flashcard, explain the answer in detail.\n\n"
-            f"Q: {question_text}\nA: {answer_text}"
-        )
+        # Launch interactive Tutor dialog
+        dlg = TutorDialog(self.mw, question_text, answer_text)
+        dlg.show()
 
-        tooltip("Tutor: fetching explanation…")
-
-        def worker() -> str:
-            try:
-                import openai  # local import to avoid mandatory dependency
-
-                api_key = os.getenv("OPENAI_API_KEY")
-                if not api_key:
-                    return "OpenAI API key not set. Please set OPENAI_API_KEY environment variable."
-
-                openai.api_key = api_key
-
-                response = openai.ChatCompletion.create(
-                    model="gpt-3.5-turbo",
-                    messages=[
-                        {"role": "system", "content": "You are a helpful tutor for flashcards."},
-                        {"role": "user", "content": prompt},
-                    ],
-                    max_tokens=300,
-                )
-                return response["choices"][0]["message"]["content"].strip()
-            except Exception as e:
-                return f"Error contacting OpenAI: {e}"
-
-        # Run in background thread to avoid blocking UI
-        self.mw.taskman.run_in_background(worker, self._onExplainResult)
-
-    def _onExplainResult(self, text: str) -> None:
-        from aqt.qt import QMessageBox
-
-        QMessageBox.information(self.mw, "Tutor Explanation", text)
+    # _onExplainResult no longer needed (dialog handles)
 
 
 # if the last element is a comment, then the RUN_STATE_MUTATION code

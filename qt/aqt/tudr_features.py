@@ -7,7 +7,7 @@ from __future__ import annotations
 import time
 from typing import Any, List, Tuple
 
-from . import gui_hooks, mw  # type: ignore
+from . import gui_hooks  # type: ignore
 from anki.cards import Card  # type: ignore
 from anki.notes import Note  # type: ignore
 
