@@ -119,6 +119,9 @@ import aqt.forms
 from aqt import addcards, addons, browser, editcurrent, filtered_deck  # isort:skip
 from aqt import stats, about, preferences, mediasync  # isort:skip
 
+# Tudr AI-enhanced features
+import aqt.tudr_features  # type: ignore  # noqa: E402
+
 
 class DialogManager:
     _dialogs: dict[str, list] = {
