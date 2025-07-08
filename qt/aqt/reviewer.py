@@ -27,7 +27,13 @@ from anki.scheduler.v3 import (
 )
 from anki.tags import MARKED_TAG
 from anki.types import assert_exhaustive
-from anki.utils import is_mac
+# Tudr imports
+from anki.utils import is_mac, strip_html
+
+from .tudr_tutor import TutorDialog  # type: ignore
+# Standard library
+import os
+# openai will be imported lazily inside worker to avoid startup failure if missing
 from aqt import AnkiQt, gui_hooks
 from aqt.browser.card_info import PreviousReviewerCardInfo, ReviewerCardInfo
 from aqt.deckoptions import confirm_deck_then_display_options
@@ -432,14 +438,19 @@ class Reviewer:
             self.auto_advance_enabled = False
             return
         try:
-            question_action = list(QuestionAction)[conf["questionAction"]]
+            answer_action = list(AnswerAction)[conf["answerAction"]]
         except IndexError:
-            question_action = QuestionAction.SHOW_ANSWER
-
-        if question_action == QuestionAction.SHOW_ANSWER:
-            self._showAnswer()
+            answer_action = AnswerAction.BURY_CARD
+        if answer_action == AnswerAction.ANSWER_AGAIN:
+            self._answerCard(1)
+        elif answer_action == AnswerAction.ANSWER_HARD:
+            self._answerCard(2)
+        elif answer_action == AnswerAction.ANSWER_GOOD:
+            self._answerCard(3)
+        elif answer_action == AnswerAction.SHOW_REMINDER:
+            tooltip(tr.studying_answer_time_elapsed())
         else:
-            tooltip(tr.studying_question_time_elapsed())
+            self.bury_current_card()
 
     def autoplay(self, card: Card) -> bool:
         print("use card.autoplay() instead of reviewer.autoplay(card)")
@@ -511,19 +522,14 @@ class Reviewer:
             self.auto_advance_enabled = False
             return
         try:
-            answer_action = list(AnswerAction)[conf["answerAction"]]
+            question_action = list(QuestionAction)[conf["questionAction"]]
         except IndexError:
-            answer_action = AnswerAction.BURY_CARD
-        if answer_action == AnswerAction.ANSWER_AGAIN:
-            self._answerCard(1)
-        elif answer_action == AnswerAction.ANSWER_HARD:
-            self._answerCard(2)
-        elif answer_action == AnswerAction.ANSWER_GOOD:
-            self._answerCard(3)
-        elif answer_action == AnswerAction.SHOW_REMINDER:
-            tooltip(tr.studying_answer_time_elapsed())
+            question_action = QuestionAction.SHOW_ANSWER
+
+        if question_action == QuestionAction.SHOW_ANSWER:
+            self._showAnswer()
         else:
-            self.bury_current_card()
+            tooltip(tr.studying_question_time_elapsed())
 
     # Answering a card
     ############################################################
@@ -687,6 +693,8 @@ class Reviewer:
             self.mw.toolbarWeb.update_background_image()
         elif url == "statesMutated":
             self._states_mutated = True
+        elif url == "explain":
+            self.onExplainCurrentCard()
         else:
             print("unrecognized anki link:", url)
 
@@ -938,6 +946,10 @@ timerStopped = false;
         buf = "<center><table cellpadding=0 cellspacing=0><tr>"
         for ease, label in self._answerButtonList():
             buf += but(ease, label)
+
+        # Tudr Tutor button
+        buf += """
+<td align=center><button title=\"Ask Tutor (ChatGPT)\" onclick='pycmd("explain");'>💡 Tutor</button></td>"""
         buf += "</tr></table>"
         return buf
 
@@ -1226,6 +1238,26 @@ timerStopped = false;
     onDelete = delete_current_note
     onMark = toggle_mark_on_current_note
     setFlag = set_flag_on_current_card
+
+# ---------------------------------------------------------------------------
+# Tudr Tutor Feature Implementation
+# ---------------------------------------------------------------------------
+
+    def onExplainCurrentCard(self) -> None:
+        """Fetch explanation for current card via ChatGPT in background."""
+
+        if not self.card:
+            return
+
+        # Prepare prompt with stripped text
+        question_text = strip_html(self.card.question())
+        answer_text = strip_html(self.card.answer())
+
+        # Launch interactive Tutor dialog
+        dlg = TutorDialog(self.mw, question_text, answer_text)
+        dlg.show()
+
+    # _onExplainResult no longer needed (dialog handles)
 
 
 # if the last element is a comment, then the RUN_STATE_MUTATION code
