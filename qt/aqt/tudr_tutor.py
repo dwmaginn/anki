@@ -1,8 +1,15 @@
 from __future__ import annotations
 
-from typing import List
+from typing import List, TYPE_CHECKING
 
-from .qt import *  # type: ignore[attr-defined]
+# During runtime, the Qt bindings are available; during static analysis they may not be.
+if TYPE_CHECKING:  # pragma: no cover
+    from .qt import QDialog, QVBoxLayout, QTextEdit, QLineEdit, QPushButton
+else:
+    try:
+        from .qt import QDialog, QVBoxLayout, QTextEdit, QLineEdit, QPushButton  # type: ignore[attr-defined]
+    except Exception:  # pragma: no cover
+        QDialog = QVBoxLayout = QTextEdit = QLineEdit = QPushButton = object  # type: ignore
 from . import mw  # type: ignore
 # Standard library
 import os
@@ -16,7 +23,7 @@ class TutorDialog(QDialog):
         self.setWindowTitle("Tutor – ChatGPT")
         self.resize(500, 600)
 
-        self._messages: List[dict] = [
+        self._messages: List[dict[str, str]] = [
             {"role": "system", "content": "You are a helpful tutor for flashcards."},
             {"role": "user", "content": f"Q: {question}\nA: {answer}\nPlease explain this answer in detail."},
         ]
@@ -55,7 +62,7 @@ class TutorDialog(QDialog):
         # run in background to avoid blocking UI
         def worker() -> str:
             try:
-                import openai  # type: ignore
+                import openai  # type: ignore[import-error]
 
                 api_key = os.getenv("OPENAI_API_KEY")
                 if not api_key:
@@ -70,9 +77,9 @@ class TutorDialog(QDialog):
             except Exception as e:
                 return f"Error contacting OpenAI: {e}"
 
-        def done(text: str):
-            # called on main thread after worker
+        def done(fut):  # type: ignore
+            text = fut.result()
             self._append_chat("Tutor", text)
             self._messages.append({"role": "assistant", "content": text})
 
-        mw.taskman.run_in_background(worker, done)  # type: ignore[arg-type]
+        mw.taskman.run_in_background(worker, done, uses_collection=False)
