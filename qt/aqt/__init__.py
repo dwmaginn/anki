@@ -119,9 +119,7 @@ import aqt.forms
 from aqt import addcards, addons, browser, editcurrent, filtered_deck  # isort:skip
 from aqt import stats, about, preferences, mediasync  # isort:skip
 
-# Import Tudr main initialiser (registers hooks); kept separate to avoid cycles
-# It registers after profile open to import submodules safely.
-import aqt.tudr_main  # type: ignore  # noqa: E402
+# Tudr modules will be loaded lazily after the profile is opened to avoid import cycles.
 
 
 class DialogManager:
@@ -786,6 +784,18 @@ def _run(argv: list[str] | None = None, exec: bool = True) -> AnkiApp | None:
     import aqt.main
 
     mw = aqt.main.AnkiQt(app, pm, backend, opts, args)
+
+    # ---- Tudr lazy initialisation ------------------------------------------------
+    # Imported only after the main window exists, to avoid circular imports during
+    # Anki startup, and because Tudr modules expect `aqt.mw` and a loaded profile.
+    try:
+        import importlib
+
+        importlib.import_module("aqt.tudr_main")  # type: ignore  # noqa: E402
+    except Exception as _tudr_err:
+        # Failure to load Tudr should not prevent Anki from starting.
+        print(f"[Tudr] failed to load: {_tudr_err}")
+
     if exec:
         print("Starting main loop...")
         app.exec()

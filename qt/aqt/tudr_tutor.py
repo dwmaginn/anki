@@ -2,14 +2,23 @@ from __future__ import annotations
 
 from typing import List, TYPE_CHECKING
 
-# During runtime, the Qt bindings are available; during static analysis they may not be.
 if TYPE_CHECKING:  # pragma: no cover
-    from .qt import QDialog, QVBoxLayout, QTextEdit, QLineEdit, QPushButton
-else:
-    try:
-        from .qt import QDialog, QVBoxLayout, QTextEdit, QLineEdit, QPushButton  # type: ignore[attr-defined]
-    except Exception:  # pragma: no cover
-        QDialog = QVBoxLayout = QTextEdit = QLineEdit = QPushButton = object  # type: ignore
+    from .qt_typing import (  # type: ignore[attr-defined]
+        QDialog,
+        QVBoxLayout,
+        QTextEdit,
+        QLineEdit,
+        QPushButton,
+    )
+
+if not TYPE_CHECKING:
+    from aqt.qt import (  # type: ignore[attr-defined]
+        QDialog,
+        QVBoxLayout,
+        QTextEdit,
+        QLineEdit,
+        QPushButton,
+    )
 from . import mw  # type: ignore
 # Standard library
 import os
