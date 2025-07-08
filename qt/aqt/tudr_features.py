@@ -7,7 +7,7 @@ from __future__ import annotations
 import time
 from typing import Any, List, Tuple
 
-from . import gui_hooks  # type: ignore
+from _aqt.hooks import reviewer_did_answer_card  # type: ignore[attr-defined]
 from anki.cards import Card  # type: ignore
 from anki.notes import Note  # type: ignore
 
@@ -38,8 +38,7 @@ def _on_card_answered(reviewer: Any, card: Card, ease: int) -> None:  # noqa: AN
 
 
 # Register the hook when module is imported
-if gui_hooks.reviewer_did_answer_card.count() == 0 or _on_card_answered not in gui_hooks.reviewer_did_answer_card:  # type: ignore[attr-defined]
-    gui_hooks.reviewer_did_answer_card.append(_on_card_answered)  # type: ignore[attr-defined]
+reviewer_did_answer_card.append(_on_card_answered)  # type: ignore[misc]
 
 
 # Placeholder for future daily report/deck creation logic
