@@ -57,6 +57,21 @@ from aqt.utils import (
     tr,
 )
 
+# Import Tudr-specific modules
+import threading
+import html
+try:
+    import openai
+    OPENAI_AVAILABLE = True
+except ImportError:
+    OPENAI_AVAILABLE = False
+
+# Import Tudr analytics
+try:
+    from . import tudr_analytics
+except ImportError:
+    tudr_analytics = None
+
 
 class RefreshNeeded(Enum):
     NOTE_TEXT = auto()
@@ -181,6 +196,13 @@ class Reviewer:
         self._reps = None
         self._refresh_needed = RefreshNeeded.QUEUES
         self.refresh_if_needed()
+        
+        # Check for daily report (Tudr feature)
+        if tudr_analytics:
+            try:
+                self.mw.progress.single_shot(1000, lambda: tudr_analytics.check_and_show_daily_report(self.mw))
+            except Exception as e:
+                print(f"Error checking daily report: {e}")
 
     # this is only used by add-ons
     def lastCard(self) -> Card | None:
@@ -565,6 +587,15 @@ class Reviewer:
     def _after_answering(self, ease: Literal[1, 2, 3, 4]) -> None:
         gui_hooks.reviewer_did_answer_card(self, self.card, ease)
         self._answeredIds.append(self.card.id)
+        
+        # Log review for Tudr analytics
+        if tudr_analytics:
+            try:
+                time_taken = self.card.time_taken() // 1000  # Convert to seconds
+                tudr_analytics.log_review(self.mw, self.card, ease, time_taken)
+            except Exception as e:
+                print(f"Error logging review for analytics: {e}")
+        
         if not self.check_timebox():
             self.nextCard()
 
@@ -632,6 +663,7 @@ class Reviewer:
             ("o", self.onOptions),
             ("i", self.on_card_info),
             ("Ctrl+Alt+i", self.on_previous_card_info),
+            ("t", self._showTutorExplanation),  # Tudr AI Tutor shortcut
             *generate_default_answer_keys(),
             ("u", self.mw.undo),
             ("5", self.on_pause_audio),
@@ -687,6 +719,8 @@ class Reviewer:
             self.mw.toolbarWeb.update_background_image()
         elif url == "statesMutated":
             self._states_mutated = True
+        elif url == "tutor":
+            self._showTutorExplanation()
         else:
             print("unrecognized anki link:", url)
 
@@ -938,6 +972,14 @@ timerStopped = false;
         buf = "<center><table cellpadding=0 cellspacing=0><tr>"
         for ease, label in self._answerButtonList():
             buf += but(ease, label)
+        
+        # Add Tutor button
+        if OPENAI_AVAILABLE:
+            buf += """
+<td align=center><button title="Ask AI Tutor (T)" onclick='pycmd("tutor");' style="background-color: #4CAF50; color: white; margin-left: 10px;">
+💡 Tutor
+</button></td>"""
+        
         buf += "</tr></table>"
         return buf
 
@@ -1226,6 +1268,109 @@ timerStopped = false;
     onDelete = delete_current_note
     onMark = toggle_mark_on_current_note
     setFlag = set_flag_on_current_card
+
+    def _showTutorExplanation(self) -> None:
+        if not OPENAI_AVAILABLE:
+            self._showTutorDialog("OpenAI library not available. Please install 'openai' package to use the Tutor feature.")
+            return
+
+        api_key = self.mw.col.conf.get("tudrOpenAIKey", "")
+        if not api_key:
+            self._promptForAPIKey()
+            return
+
+        tooltip("Asking AI Tutor... Please wait.")
+        
+        # Use a separate thread to avoid blocking the UI
+        threading.Thread(target=self._fetchTutorExplanation, args=(api_key,)).start()
+
+    def _promptForAPIKey(self) -> None:
+        from aqt.qt import QInputDialog
+        api_key, ok = QInputDialog.getText(
+            self.mw,
+            "OpenAI API Key Required",
+            "Please enter your OpenAI API key to use the Tutor feature:\n\n"
+            "You can get an API key from https://platform.openai.com/api-keys\n"
+            "Your key will be stored in your Anki profile.",
+            text=""
+        )
+        
+        if ok and api_key.strip():
+            self.mw.col.conf["tudrOpenAIKey"] = api_key.strip()
+            self.mw.col.save()
+            self._showTutorExplanation()
+
+    def _fetchTutorExplanation(self, api_key: str) -> None:
+        if not self.card:
+            return
+
+        # Strip HTML tags from question and answer for cleaner prompt
+        question_text = re.sub('<.*?>', '', self.card.question())
+        answer_text = re.sub('<.*?>', '', self.card.answer())
+        
+        prompt = f"""You are a helpful tutoring assistant for flashcard learning.
+
+Card Question: {question_text}
+Card Answer: {answer_text}
+
+Please provide a clear, educational explanation of this flashcard content. Focus on:
+1. Why this answer is correct
+2. Key concepts or principles involved
+3. How to remember this information
+4. Any common mistakes to avoid
+
+Keep your explanation concise but thorough (2-3 paragraphs max)."""
+
+        try:
+            client = openai.OpenAI(api_key=api_key)
+            response = client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": "You are a helpful tutoring assistant. Provide clear, educational explanations."},
+                    {"role": "user", "content": prompt}
+                ],
+                max_tokens=400,
+                temperature=0.7,
+            )
+            explanation = response.choices[0].message.content
+            
+            # Run the callback on the main thread
+            self.mw.taskman.run_on_main(lambda: self._showTutorDialog(explanation))
+            
+        except Exception as e:
+            error_msg = f"Error getting explanation from AI: {str(e)}"
+            self.mw.taskman.run_on_main(lambda: self._showTutorDialog(error_msg))
+
+    def _showTutorDialog(self, text: str) -> None:
+        from aqt.qt import QDialog, QVBoxLayout, QTextEdit, QPushButton, QHBoxLayout
+        
+        dialog = QDialog(self.mw)
+        dialog.setWindowTitle("💡 Tudr AI Tutor")
+        dialog.setMinimumSize(500, 300)
+        dialog.resize(600, 400)
+        
+        layout = QVBoxLayout()
+        
+        # Text area for explanation
+        text_edit = QTextEdit()
+        text_edit.setPlainText(text)
+        text_edit.setReadOnly(True)
+        layout.addWidget(text_edit)
+        
+        # Buttons
+        button_layout = QHBoxLayout()
+        
+        close_button = QPushButton("Close")
+        close_button.clicked.connect(dialog.accept)
+        button_layout.addWidget(close_button)
+        
+        copy_button = QPushButton("Copy to Clipboard")
+        copy_button.clicked.connect(lambda: self.mw.app.clipboard().setText(text))
+        button_layout.addWidget(copy_button)
+        
+        layout.addLayout(button_layout)
+        dialog.setLayout(layout)
+        dialog.exec()
 
 
 # if the last element is a comment, then the RUN_STATE_MUTATION code
